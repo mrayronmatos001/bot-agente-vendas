@@ -38,6 +38,7 @@ client.on('message', async msg => {
     const payload = {
         de: contact.pushname || contact.pushnumber,
         numero: msg.from,
+        mensagem: msg.body,
         tipo: msg.type,
         idMensagem: msg.id._serialized,
         timestamp: msg.timestamp,
