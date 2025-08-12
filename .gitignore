@@ -30,3 +30,7 @@ logs
 # Backup do sistema operacional
 *.swp
 *.swo
+
+#Certificados SSL e Chaves Privadas
+key.pem 
+cert.pem
