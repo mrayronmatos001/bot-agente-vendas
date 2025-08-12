@@ -2,7 +2,7 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
-const express = require('express'); // Apenas express é necessário para o servidor
+const express = require('express');
 
 // --- Configuração do Cliente WhatsApp ---
 const client = new Client({
@@ -16,9 +16,9 @@ const client = new Client({
 const app = express();
 app.use(express.json());
 
-const PORT = 3001; // Use a porta 3001, que sabemos que está livre
+const PORT = 3001; // Porta para o servidor de API
 
-// Rota que o n8n vai chamar
+// Rota que o n8n vai chamar para enviar a resposta
 app.post('/enviar-mensagem', async (req, res) => {
     const { numero, mensagem } = req.body;
 
@@ -43,11 +43,58 @@ app.post('/enviar-mensagem', async (req, res) => {
     }
 });
 
-// --- Lógica do Cliente WhatsApp (sem alterações) ---
-// ... (seu código client.on('qr'), client.on('ready'), client.on('message') continua igual) ...
+// --- Lógica do Cliente WhatsApp ---
+
+client.on('qr', qr => {
+    console.log('📱 Escaneie o QR Code abaixo com o seu WhatsApp:');
+    qrcode.generate(qr, { small: true });
+});
+
+client.on('ready', () => {
+    console.log('✅ Cliente WhatsApp está pronto e conectado!');
+});
+
+// ***** ESTA É A PARTE QUE ESTAVA FALTANDO *****
+client.on('message', async msg => {
+    // Ignora mensagens de grupos
+    if (msg.from.includes('@g.us')) {
+        return;
+    }
+
+    console.log(`📥 Mensagem recebida de ${msg.from}: "${msg.body}"`);
+
+    const contact = await msg.getContact();
+
+    const payload = {
+        de: contact.pushname || contact.name || msg.from,
+        numero: msg.from,
+        mensagem: msg.body,
+        tipo: msg.type,
+        idMensagem: msg.id._serialized,
+        timestamp: msg.timestamp,
+    };
+
+    // Envia os dados para o seu fluxo de trabalho no n8n
+    try {
+        await axios.post('https://chatclean-automations.xyz/webhook/mensagem-vendas', payload );
+        console.log(`🚀 Webhook enviado para o n8n com sucesso para o número ${payload.numero}.`);
+    } catch (error) {
+        // Log de erro aprimorado
+        console.error(`❌ Erro CRÍTICO ao enviar o webhook para o n8n:`);
+        if (error.response) {
+            console.error('   Data:', error.response.data);
+            console.error('   Status:', error.response.status);
+        } else if (error.request) {
+            console.error('   Requisição feita, mas sem resposta. Verifique a rede/firewall.');
+        } else {
+            console.error('   Erro na configuração do Axios:', error.message);
+        }
+    }
+});
 
 // --- Inicialização ---
-// Inicia o servidor HTTP simples
+
+// Inicia o servidor Express
 app.listen(PORT, () => {
     console.log(`🚀 Servidor de API do Bot rodando em modo HTTP na porta ${PORT}`);
 });
